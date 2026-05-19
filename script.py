@@ -2,6 +2,7 @@ import csv
 import datetime
 import random
 from datetime import timedelta
+from dateutil import parser
 import pytz
 
 random.seed(42)
@@ -68,7 +69,12 @@ def generate_transactions(dtst, min_txn=1, max_txn=5):
     for row in dtst[1:]:
         account_id = row[0]
         col_curr = row[2]
-        col_date = datetime.datetime.fromisoformat(row[3])
+        col_date_str = row[3]
+        if not col_date_str:
+            tz_selected = random_timezone()
+            col_date = generate_date(datetime.datetime(2024, 1, 1), datetime.datetime(2026, 12, 12), tz_selected)
+        else:
+            col_date = datetime.datetime.fromisoformat(col_date_str)
         num_txn = random.randint(min_txn, max_txn)
         for _ in range(num_txn):
             txn_id += 1
@@ -115,25 +121,82 @@ def generate_transactions(dtst, min_txn=1, max_txn=5):
     return dtst_txn
 
 
-import random
-
-
 def add_row_duplicates(table, num_duplicates=1, percent_duplicates=0.05):
     header = table[0]
     rows = table[1:]
     n = len(rows)
     total_duplicates = max(num_duplicates, int(n * percent_duplicates))
-
     indices = random.choices(range(n), k=total_duplicates)
     duplicates = [rows[i] for i in indices]
-
     random.shuffle(duplicates)
     new_rows = rows + duplicates
     random.shuffle(new_rows)
     return [header] + new_rows
 
 
-if __name__ == '__main__':
-    accounts = generate_account(num_accounts=75)
-    accounts_with_dupes = add_row_duplicates(accounts, percent_duplicates=0.05)
+def add_partial_nulls(table, percent_nulls=0.05, min_fields=1, max_fields=5, exclude_cols=None):
+    header = table[0]
+    rows = table[1:]
+    n = len(rows)
+    num_null_rows = int(n * percent_nulls)
+    indices = random.sample(range(n), num_null_rows)
+    if max_fields is None:
+        max_fields = len(header) - 1
+    if exclude_cols is None:
+        exclude_cols = [0]
+    for idx in indices:
+        possible_fields = [i for i in range(len(header)) if i not in exclude_cols]
+        num_fields_to_null = random.randint(min_fields, min(max_fields, len(possible_fields)))
+        fields_to_null = random.sample(possible_fields, num_fields_to_null)
+        for f in fields_to_null:
+            rows[idx][f] = ""
+    return [header] + rows
 
+
+def randomize_date_formats(table, date_col_idx, percent_change=0.1, exclude_header=True):
+    date_formats = [
+        "%Y-%m-%dT%H:%M:%S%z"  # ISO with timezone
+    ]
+    header = table[0] if exclude_header else []
+    rows = table[1:] if exclude_header else table
+    n = len(rows)
+    num_to_change = int(n * percent_change)
+    indices = random.sample(range(n), num_to_change)
+    for idx in indices:
+        row = rows[idx]
+        date_str = row[date_col_idx]
+
+        if not date_str:
+            continue
+        try:
+
+            dt = parser.parse(date_str)
+
+            fmt = random.choice(date_formats)
+            new_date_str = dt.strftime(fmt)
+            row[date_col_idx] = new_date_str
+        except Exception:
+            continue
+    return [header] + rows if exclude_header else rows
+
+
+if __name__ == '__main__':
+    accounts = generate_account(num_accounts=100)
+    accounts_with_dupes = add_row_duplicates(accounts, percent_duplicates=0.05)
+    accounts_with_nulls = add_partial_nulls(accounts_with_dupes, percent_nulls=0.05, min_fields=1, max_fields=4,
+                                            exclude_cols=[0])
+    accounts_with_mixed_dates = randomize_date_formats(accounts_with_nulls, date_col_idx=3, percent_change=0.15)
+
+    transactions = generate_transactions(accounts_with_nulls, min_txn=1, max_txn=3)
+    transactions_with_dupes = add_row_duplicates(transactions, percent_duplicates=0.1)
+    transactions_with_nulls = add_partial_nulls(transactions_with_dupes, percent_nulls=0.05, min_fields=1, max_fields=5,
+                                                exclude_cols=[0, 1])
+    transactions_with_mixed_dates = randomize_date_formats(transactions_with_nulls, date_col_idx=2, percent_change=0.15)
+
+with open('accounts.csv', 'w', newline='') as acc_csv:
+    writer = csv.writer(acc_csv)
+    writer.writerows(accounts_with_mixed_dates)
+
+with open('transaction_records.csv', 'w', newline='') as txn_csv:
+    writer = csv.writer(txn_csv)
+    writer.writerows(transactions_with_mixed_dates)
