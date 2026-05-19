@@ -70,11 +70,20 @@ def generate_transactions(dtst, min_txn=1, max_txn=5):
         account_id = row[0]
         col_curr = row[2]
         col_date_str = row[3]
-        if not col_date_str:
+        try:
+            tz_name = row[5] if len(row) > 5 and row[5] else random_timezone().zone
+            tz_selected = pytz.timezone(tz_name)
+        except Exception:
             tz_selected = random_timezone()
+        if not col_date_str:
             col_date = generate_date(datetime.datetime(2024, 1, 1), datetime.datetime(2026, 12, 12), tz_selected)
         else:
-            col_date = datetime.datetime.fromisoformat(col_date_str)
+            try:
+                col_date = parser.parse(col_date_str)
+            except Exception:
+                col_date = generate_date(datetime.datetime(2024, 1, 1), datetime.datetime(2026, 12, 12), tz_selected)
+            if col_date.tzinfo is None:
+                col_date = tz_selected.localize(col_date)
         num_txn = random.randint(min_txn, max_txn)
         for _ in range(num_txn):
             txn_id += 1
@@ -155,7 +164,13 @@ def add_partial_nulls(table, percent_nulls=0.05, min_fields=1, max_fields=5, exc
 
 def randomize_date_formats(table, date_col_idx, percent_change=0.1, exclude_header=True):
     date_formats = [
-        "%Y-%m-%dT%H:%M:%S%z"  # ISO with timezone
+        "%Y-%m-%dT%H:%M:%S%z",
+        "%Y-%m-%d %H:%M:%S",
+        "%d/%m/%Y %H:%M",
+        "%m-%d-%Y %I:%M %p",
+        "%Y/%m/%d",
+        "%d-%b-%Y",
+        "%Y-%m-%d",
     ]
     header = table[0] if exclude_header else []
     rows = table[1:] if exclude_header else table
@@ -165,19 +180,54 @@ def randomize_date_formats(table, date_col_idx, percent_change=0.1, exclude_head
     for idx in indices:
         row = rows[idx]
         date_str = row[date_col_idx]
-
         if not date_str:
             continue
         try:
-
             dt = parser.parse(date_str)
-
             fmt = random.choice(date_formats)
+
+            if "%z" not in fmt and dt.tzinfo is not None:
+                dt = dt.astimezone(datetime.timezone.utc).replace(tzinfo=None)
             new_date_str = dt.strftime(fmt)
             row[date_col_idx] = new_date_str
         except Exception:
             continue
     return [header] + rows if exclude_header else rows
+
+
+def add_field_errors(table, percent_error=0.03, error_fields=None):
+    header = table[0]
+    rows = table[1:]
+    n = len(rows)
+    num_error_rows = int(n * percent_error)
+    indices = random.sample(range(n), num_error_rows)
+    if error_fields is None:
+        error_fields = list(range(len(header)))
+
+    typo_map = {
+        "BOOK": "BOK", "PENDING": "PENDNG", "REJECTED": "REJCTD",
+        "USD": "US", "EUR": "EURO", "SEK": "SEKK",
+        "CACC": "CACCX", "SAVG": "SAV", "LOAN": "LOA"
+    }
+    nonsense = ["???", "N/A", "null", "xxxx"]
+
+    for idx in indices:
+        row = rows[idx]
+        for col in error_fields:
+            val = row[col]
+            if not val:
+                continue
+
+            err_type = random.choice(["typo", "nonsense", "case", "whitespace"])
+            if err_type == "typo" and str(val) in typo_map:
+                row[col] = typo_map[str(val)]
+            elif err_type == "nonsense":
+                row[col] = random.choice(nonsense)
+            elif err_type == "case":
+                row[col] = str(val).lower() if random.random() < 0.5 else str(val).upper()
+            elif err_type == "whitespace":
+                row[col] = f"  {val}  "
+    return [header] + rows
 
 
 if __name__ == '__main__':
@@ -186,17 +236,19 @@ if __name__ == '__main__':
     accounts_with_nulls = add_partial_nulls(accounts_with_dupes, percent_nulls=0.05, min_fields=1, max_fields=4,
                                             exclude_cols=[0])
     accounts_with_mixed_dates = randomize_date_formats(accounts_with_nulls, date_col_idx=3, percent_change=0.15)
+    accounts_with_errors = add_field_errors(accounts_with_mixed_dates, percent_error=0.03, error_fields=[1, 2])
 
-    transactions = generate_transactions(accounts_with_nulls, min_txn=1, max_txn=3)
+    transactions = generate_transactions(accounts_with_mixed_dates, min_txn=1, max_txn=3)
     transactions_with_dupes = add_row_duplicates(transactions, percent_duplicates=0.1)
     transactions_with_nulls = add_partial_nulls(transactions_with_dupes, percent_nulls=0.05, min_fields=1, max_fields=5,
                                                 exclude_cols=[0, 1])
     transactions_with_mixed_dates = randomize_date_formats(transactions_with_nulls, date_col_idx=2, percent_change=0.15)
+    transactions_with_errors = add_field_errors(transactions_with_mixed_dates, percent_error=0.03, error_fields=[4, 6])
 
-with open('accounts.csv', 'w', newline='') as acc_csv:
-    writer = csv.writer(acc_csv)
-    writer.writerows(accounts_with_mixed_dates)
+    with open('accounts.csv', 'w', newline='') as acc_csv:
+        writer = csv.writer(acc_csv)
+        writer.writerows(accounts_with_errors)
 
-with open('transaction_records.csv', 'w', newline='') as txn_csv:
-    writer = csv.writer(txn_csv)
-    writer.writerows(transactions_with_mixed_dates)
+    with open('transaction_records.csv', 'w', newline='') as txn_csv:
+        writer = csv.writer(txn_csv)
+        writer.writerows(transactions_with_errors)
