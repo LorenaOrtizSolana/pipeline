@@ -1,7 +1,7 @@
 import csv
 import datetime
 import random
-from datetime import timedelta
+from datetime import timedelta, timezone
 import pytz
 
 random.seed(42)
@@ -17,13 +17,13 @@ def generate_date(start_date, end_date):
     time_choice = random.choices(timezones, weights=[0.8, 0.1, 0.1])[0]
     tz_selected = pytz.timezone(time_choice)
     date = tz_selected.localize(date)
-    return date
+    date_utc = date.astimezone(pytz.utc)
+    return date_utc
 
 
 def generate_amount():
     intervals = [1, 2, 3, 4]
     inter_choice = random.choices(intervals, weights=[0.1, 0.2, 0.6, 0.1])[0]
-
     if inter_choice == 1:
         amount = random.randint(100, 199)
     elif inter_choice == 2:
@@ -47,38 +47,26 @@ def generate_statustxn():
     return status_choice
 
 
-def generate_transactions():
-    dtst = [['Date', 'Amount', 'Currency', 'Debit/Credit', 'Status']]
-    start_date = datetime.datetime(2025, 1, 1)
-    end_date = datetime.datetime(2026, 2, 2)
-
-    for i in range(3):
-        debcred_choice = random.choice(["DEBIT", "CREDIT"])
-        amount = generate_amount()
-        amount = abs(amount) if debcred_choice == "DEBIT" else -abs(amount)
-
-        dtst.append([
-            generate_date(start_date, end_date),
-            amount,
-            generate_currency(),
-            debcred_choice,
-            generate_statustxn()
-        ])
-    return dtst
-
-
-def generate_account(dtst):
-    dtst_acc = [['Status', 'Currency', 'OpeningDate', 'AccountTypeCode']]
-    col_curr = [row[2] for row in dtst[1:]]
-    col_date = [row[0] for row in dtst[1:]]
-
-    start_date = datetime.datetime(2024, 1, 1)
-    end_date = datetime.datetime(2026, 12, 12)
-
-    for i in range(3):
+def generate_account(num_accounts=3):
+    dtst_acc = [['AccountID', 'Status', 'Currency', 'OpeningDate', 'AccountTypeCode']]
+    for i in range(num_accounts):
         types_choice = random.choice(['CACC', 'SAVG', 'LOAN'])
+        start_date = datetime.datetime(2024, 1, 1)
+        end_date = datetime.datetime(2026, 12, 12)
+        opening_date = generate_date(start_date, end_date)
+        dtst_acc.append([i, generate_statustxn(), generate_currency(), opening_date.isoformat(), types_choice])
+    return dtst_acc
 
-        currency_list = ["USD", "EUR", "SEK"]
+
+def generate_transactions(dtst):
+    dtst_txn = [['Date', 'Amount', 'Currency', 'Debit/Credit', 'Status']]
+    currency_list = ["USD", "EUR", "SEK"]
+    start_date = datetime.datetime(2024, 1, 1, tzinfo=timezone.utc)
+    end_date = datetime.datetime(2026, 12, 12, tzinfo=timezone.utc)
+    col_curr = [row[2] for row in dtst[1:]]
+    col_date = [datetime.datetime.fromisoformat(row[3]) for row in dtst[1:]]
+
+    for i in range(len(col_curr)):
         if col_curr[i] == 'USD':
             curr_choice = random.choices(currency_list, weights=[0.8, 0.1, 0.1])[0]
         elif col_curr[i] == 'EUR':
@@ -86,28 +74,41 @@ def generate_account(dtst):
         else:  # SEK
             curr_choice = random.choices(currency_list, weights=[0.1, 0.1, 0.8])[0]
 
-        datefuture = random.choices([0, 1], weights=[0.9, 0.1])[0]
-
-        if datefuture == 1:
-            delta = end_date - col_date[i]
-            delta_seconds = delta.days * 86400 + delta.seconds
-            random_second = random.randrange(delta_seconds) if delta_seconds > 0 else 0
-            date = col_date[i] + timedelta(seconds=random_second)
-        else:
+        txndate_inpast = random.choices([0, 1], weights=[0.9, 0.1])[0]
+        if txndate_inpast == 1:
             delta = col_date[i] - start_date
             delta_seconds = delta.days * 86400 + delta.seconds
             random_second = random.randrange(delta_seconds) if delta_seconds > 0 else 0
             date = start_date + timedelta(seconds=random_second)
+        else:
+            delta = end_date - col_date[i]
+            delta_seconds = delta.days * 86400 + delta.seconds
+            random_second = random.randrange(delta_seconds) if delta_seconds > 0 else 0
+            date = col_date[i] + timedelta(seconds=random_second)
 
-        dtst_acc.append([generate_statustxn(), curr_choice, date, types_choice])
-    return dtst_acc
+        date = date.replace(tzinfo=timezone.utc)
+
+        debcred_choice = random.choice(["DEBIT", "CREDIT"])
+        amount = generate_amount()
+        amount = abs(amount) if debcred_choice == "DEBIT" else -abs(amount)
+
+        dtst_txn.append([
+            date.isoformat(),
+            amount,
+            curr_choice,
+            debcred_choice,
+            generate_statustxn()
+        ])
+    return dtst_txn
 
 
 if __name__ == '__main__':
+    accounts = generate_account(num_accounts=3)
+
+    with open('accounts.csv', 'w', newline='') as acc_csv:
+        writer = csv.writer(acc_csv)
+        writer.writerows(accounts)
+
     with open('transaction_records.csv', 'w', newline='') as txn_csv:
         writer = csv.writer(txn_csv)
-        writer.writerows(generate_transactions())
-    transactions = generate_transactions()
-    with open('accounts.csv', 'w', newline='') as acc_csv:
-         writer = csv.writer(acc_csv)
-         writer.writerows(generate_account(transactions))
+        writer.writerows(generate_transactions(accounts))
