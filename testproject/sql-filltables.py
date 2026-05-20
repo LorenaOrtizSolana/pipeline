@@ -11,7 +11,7 @@ cursor.execute('''
 CREATE TABLE IF NOT EXISTS accounts (   
     AccountId INTEGER PRIMARY KEY AUTOINCREMENT,   
     Status VARCHAR(255),   
-    Currency INTEGER,   
+    Currency VARCHAR(3),   
     OpeningDate DATETIME,   
     AccountTypeCode CHAR(10),   
     Timezone VARCHAR(255)   
@@ -32,7 +32,8 @@ with open('accounts.csv', newline='', encoding='utf-8') as csvfile:
         ''', row[1:])
 
 # Untouched Accounts table
-cursor.execute('CREATE TABLE IF NOT EXISTS orig_accounts AS SELECT * FROM accounts')
+cursor.execute('DROP TABLE IF EXISTS orig_accounts')
+cursor.execute('CREATE TABLE orig_accounts AS SELECT * FROM accounts')
 
 # Transactions table
 cursor.execute('''   
@@ -41,7 +42,7 @@ CREATE TABLE IF NOT EXISTS transactions (
     AccountId INTEGER NOT NULL, 
     Date DATETIME,     
     Amount INTEGER,     
-    Currency INTEGER,   
+    Currency VARCHAR(3),   
     DebitCredit TEXT,   
     Status TEXT,   
     Timezone TEXT, 
@@ -74,7 +75,8 @@ with open('transactions.csv', newline='', encoding='utf-8') as csvfile:
                 list_empty_accid.append(row)
 
 # Untouched Transactions table
-cursor.execute('CREATE TABLE IF NOT EXISTS orig_transactions AS SELECT * FROM transactions')
+cursor.execute('DROP TABLE IF EXISTS orig_transactions')
+cursor.execute('CREATE TABLE orig_transactions AS SELECT * FROM transactions')
 
 # Map TransactionIds to AccountIds
 cursor.execute('SELECT TransactionId,AccountId FROM transactions')
@@ -88,3 +90,6 @@ for key, value in map_ids.items():
         flipped_map_ids[value] = [key]
     else:
         flipped_map_ids[value].append(key)
+
+conn.commit()
+conn.close()
