@@ -249,6 +249,6 @@ if __name__ == '__main__':
         writer = csv.writer(acc_csv)
         writer.writerows(accounts_with_errors)
 
-    with open('transaction_records.csv', 'w', newline='') as txn_csv:
+    with open('transactions.csv', 'w', newline='') as txn_csv:
         writer = csv.writer(txn_csv)
         writer.writerows(transactions_with_errors)
