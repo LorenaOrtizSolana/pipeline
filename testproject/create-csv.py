@@ -56,13 +56,13 @@ def generate_account(num_accounts=50):
         tz_selected = random_timezone()
         tz_name = tz_selected.zone
 
-        date_future_choice = random.choices([1, 2], weights=[0.9, 0.1])[0]
+        date_future_choice = random.choices([1, 2], weights=[0.95, 0.05])[0]
         if date_future_choice == 2:
-            start_date = datetime.datetime(2026, 12, 12)
-            end_date = datetime.datetime(2027, 12, 12)
+            start_date = datetime.datetime(2024, 12, 12)
+            end_date = datetime.datetime(2025, 1, 1)
         else:
-            start_date = datetime.datetime(2024, 1, 1)
-            end_date = datetime.datetime.now()
+            start_date = datetime.datetime(2023, 1, 1)
+            end_date = datetime.datetime(2024, 11, 11)
         opening_date = generate_date(start_date, end_date, tz_selected)
         status_choice = random.choices(['ACTIVE', 'CLOSED'], weights=[0.85, 0.15])[0]
         dtst_acc.append([i, status_choice, generate_currency(), opening_date.isoformat(), types_choice, tz_name])
@@ -83,12 +83,12 @@ def generate_transactions(dtst, min_txn=1, max_txn=5):
         except Exception:
             tz_selected = random_timezone()
         if not col_date_str:
-            col_date = generate_date(datetime.datetime(2024, 1, 1), datetime.datetime(2025, 12, 12), tz_selected)
+            col_date = generate_date(datetime.datetime(2024, 12, 12), datetime.datetime(2025, 12, 12), tz_selected)
         else:
             try:
                 col_date = parser.parse(col_date_str)
             except Exception:
-                col_date = generate_date(datetime.datetime(2024, 1, 1), datetime.datetime(2025, 12, 12), tz_selected)
+                col_date = generate_date(datetime.datetime(2024, 12, 12), datetime.datetime(2025, 12, 12), tz_selected)
             if col_date.tzinfo is None:
                 col_date = tz_selected.localize(col_date)
         num_txn = random.randint(min_txn, max_txn)
@@ -96,8 +96,14 @@ def generate_transactions(dtst, min_txn=1, max_txn=5):
             txn_id += 1
             txn_tz_selected = random_timezone()
             txn_tz_name = txn_tz_selected.zone
-            txn_start_date = datetime.datetime(2023, 1, 1)
-            txn_end_date = datetime.datetime(2025, 12, 12)
+
+            date_earlier_choice = random.choices([1, 2], weights=[0.95, 0.05])[0]
+            if date_earlier_choice == 2:
+                txn_start_date = datetime.datetime(2023, 1, 1)
+                txn_end_date = datetime.datetime(2024, 11, 11)
+            else:
+                txn_start_date = datetime.datetime(2024, 12, 12)
+                txn_end_date = datetime.datetime(2025, 12, 12)
             txn_start_date = txn_tz_selected.localize(txn_start_date)
             txn_end_date = txn_tz_selected.localize(txn_end_date)
             if col_curr == 'USD':
