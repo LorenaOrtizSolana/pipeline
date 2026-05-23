@@ -13,7 +13,7 @@ cursor.execute('''
 CREATE TABLE IF NOT EXISTS accounts (   
     AccountId INTEGER PRIMARY KEY AUTOINCREMENT,   
     Status VARCHAR(255),   
-    Currency INTEGER,   
+    Currency CHAR(10),   
     OpeningDate DATETIME,   
     AccountTypeCode CHAR(10),   
     Timezone VARCHAR(255)   
