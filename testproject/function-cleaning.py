@@ -1,8 +1,55 @@
 import sqlite3
 import difflib
 from dateutil import parser
-from datetime import timezone
-import sqlite3
+from datetime import datetime, timezone
+
+
+def move_and_remove_future_dates(conn, table, date_column, id_column='rowid'):
+    cursor = conn.cursor()
+
+    cursor.execute(f"PRAGMA table_info({table})")
+    columns = [row[1] for row in cursor.fetchall()]
+    col_defs = ', '.join([f"{col} TEXT" for col in columns])
+
+    now = datetime.now().isoformat()
+
+    # rows with future dates
+    cursor.execute(
+        f"SELECT * FROM {table} WHERE {date_column} > ?",
+        (now,)
+    )
+    future_rows = cursor.fetchall()
+    # if not future_rows:
+    # print(f"No future dates found in column '{date_column}'.")
+    # return
+    ####
+
+    ####
+    new_table = f"{table}_future_{date_column}"
+    cursor.execute(f"DROP TABLE IF EXISTS {new_table}")
+    cursor.execute(f"CREATE TABLE {new_table} ({col_defs})")
+    ####
+
+    ####
+    placeholders = ','.join(['?'] * len(columns))
+    cursor.executemany(
+        f"INSERT INTO {new_table} VALUES ({placeholders})",
+        future_rows
+    )
+    ####
+
+    ####
+    id_idx = columns.index(id_column)
+    future_ids = [row[id_idx] for row in future_rows]
+    if future_ids:
+        id_placeholders = ','.join(['?'] * len(future_ids))
+        cursor.execute(
+            f"DELETE FROM {table} WHERE {id_column} IN ({id_placeholders})",
+            future_ids
+        )
+        ####
+
+    conn.commit()
 
 
 def clean_nonnumeric_rows(conn, table, column, id_column='rowid'):
@@ -206,4 +253,8 @@ clean_and_flag_column(
     id_column='AccountId'
 )
 
+move_and_remove_future_dates(conn, 'transactions', 'Date', id_column='TransactionId')
+move_and_remove_future_dates(conn, 'accounts', 'OpeningDate', id_column='AccountId')
+
 conn.close()
+
