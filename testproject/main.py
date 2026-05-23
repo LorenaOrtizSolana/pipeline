@@ -4,7 +4,7 @@ import os
 import os
 
 def run_scripts():
-    scripts = ['create-csv.py','sql-filltables.py', 'sql-duplicates.py','sql-empty.py', 'sql-cleaning.py', 'function_cleaning.py','balance.py' ]
+    scripts = ['create-csv.py','sql-filltables.py', 'sql-duplicates.py','sql-empty.py', 'sql-cleaning.py', 'function_cleaning.py','balance.py', 'log.py']
 
     for script in scripts:
         print(f"\n--- Running {script} ---")

@@ -1,0 +1,11 @@
+CLEANING LOG SUMMARY REPORT
+========================================
+Generated: 2026-05-23 22:56:46.241871
+
+Total changes: 131
+Tables affected: 2
+Columns affected: 5
+Most cleaned table: transactions
+Most cleaned column: Date
+Most common action: corrected
+Date range: 2026-05-23 20:56:40 to 2026-05-23 20:56:42

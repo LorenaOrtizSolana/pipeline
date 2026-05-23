@@ -1,0 +1,67 @@
+EXCEPTION REPORT - DATA CLEANING PIPELINE
+==================================================
+Generated: 2026-05-23 22:56:47
+
+RESUMEN EJECUTIVO
+--------------------
+Total de cambios realizados: 131
+Tablas afectadas: ['transactions', 'accounts']
+Columnas afectadas: ['Date', 'OpeningDate', 'Status', 'Timezone', 'Currency']
+
+DETALLE POR TIPO DE ERROR
+-------------------------
+
+[Date format converted to ISO8601 with timezone]
+  Cantidad: 65
+  Ejemplo: transactions.Date ('2024-03-07T17:03:02+0100' → '2024-03-07T17:03:02+01:00')
+
+[Transaction date before account opening date]
+  Cantidad: 41
+  Ejemplo: transactions.Date ('2023-06-18T22:40:10+02:00' → 'MOVED_TO_INVALID_TABLE')
+
+[Value mapped from "  BOOK  " to closest valid: ['BOOK', 'PENDING', 'REJECTED']]
+  Cantidad: 1
+  Ejemplo: transactions.Status ('  BOOK  ' → 'BOOK')
+
+[Value mapped from "  EUR  " to closest valid: ['EUR', 'USD', 'SEK']]
+  Cantidad: 1
+  Ejemplo: accounts.Currency ('  EUR  ' → 'EUR')
+
+[Value mapped from "  Europe/Berlin  " to closest valid: ['Europe/Berlin', 'Europe/London', 'America/New_York']]
+  Cantidad: 6
+  Ejemplo: transactions.Timezone ('  Europe/Berlin  ' → 'Europe/Berlin')
+
+[Value mapped from "  PENDING  " to closest valid: ['BOOK', 'PENDING', 'REJECTED']]
+  Cantidad: 2
+  Ejemplo: transactions.Status ('  PENDING  ' → 'PENDING')
+
+[Value mapped from "  REJECTED  " to closest valid: ['BOOK', 'PENDING', 'REJECTED']]
+  Cantidad: 2
+  Ejemplo: transactions.Status ('  REJECTED  ' → 'REJECTED')
+
+[Value mapped from "ACTVE" to closest valid: ['ACTIVE', 'CLOSED']]
+  Cantidad: 4
+  Ejemplo: accounts.Status ('ACTVE' → 'ACTIVE')
+
+[Value mapped from "BOK" to closest valid: ['BOOK', 'PENDING', 'REJECTED']]
+  Cantidad: 2
+  Ejemplo: transactions.Status ('BOK' → 'BOOK')
+
+[Value mapped from "EURO" to closest valid: ['EUR', 'USD', 'SEK']]
+  Cantidad: 2
+  Ejemplo: accounts.Currency ('EURO' → 'EUR')
+
+[Value mapped from "PENDNG" to closest valid: ['BOOK', 'PENDING', 'REJECTED']]
+  Cantidad: 2
+  Ejemplo: transactions.Status ('PENDNG' → 'PENDING')
+
+[Value mapped from "US" to closest valid: ['EUR', 'USD', 'SEK']]
+  Cantidad: 2
+  Ejemplo: accounts.Currency ('US' → 'USD')
+
+[Value mapped from "america/new_york" to closest valid: ['Europe/Berlin', 'Europe/London', 'America/New_York']]
+  Cantidad: 1
+  Ejemplo: transactions.Timezone ('america/new_york' → 'America/New_York')
+
+==================================================
+FIN DEL REPORTE

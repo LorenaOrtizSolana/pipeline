@@ -1,7 +1,13 @@
 import sqlite3
+import csv
+import itertools
 import difflib
 from dateutil import parser
 from datetime import datetime, timezone
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import os
 
 
 def log_change(conn, table_name, row_id, column_name, original_value, new_value, action, reason):
@@ -331,6 +337,213 @@ def clean_and_flag_column(
     conn.commit()
 
 
+def create_log_table(conn):
+    cursor = conn.cursor()
+    cursor.execute('''
+                   CREATE TABLE IF NOT EXISTS cleaning_log
+                   (
+                       log_id
+                       INTEGER
+                       PRIMARY
+                       KEY
+                       AUTOINCREMENT,
+                       table_name
+                       TEXT
+                       NOT
+                       NULL,
+                       row_id
+                       TEXT
+                       NOT
+                       NULL,
+                       column_name
+                       TEXT
+                       NOT
+                       NULL,
+                       original_value
+                       TEXT,
+                       new_value
+                       TEXT,
+                       action
+                       TEXT,
+                       reason
+                       TEXT,
+                       cleaned_at
+                       TIMESTAMP
+                       DEFAULT
+                       CURRENT_TIMESTAMP
+                   )
+                   ''')
+    conn.commit()
+    print("✓ cleaning_log table ready")
+
+
+def generate_summary_report(conn, output_dir="cleaning_reports"):
+    os.makedirs(output_dir, exist_ok=True)
+
+    df = pd.read_sql_query("SELECT * FROM cleaning_log", conn)
+
+    if df.empty:
+        print("No cleaning actions logged yet.")
+        return None
+
+    summary = {
+        "Total changes": len(df),
+        "Tables affected": df['table_name'].nunique(),
+        "Columns affected": df['column_name'].nunique(),
+        "Most cleaned table": df['table_name'].mode()[0] if not df.empty else "N/A",
+        "Most cleaned column": df['column_name'].mode()[0] if not df.empty else "N/A",
+        "Most common action": df['action'].mode()[0] if not df.empty else "N/A",
+        "Date range": f"{df['cleaned_at'].min()} to {df['cleaned_at'].max()}"
+    }
+
+    with open(f"{output_dir}/summary_report.txt", "w", encoding="utf-8") as f:
+        f.write("CLEANING LOG SUMMARY REPORT\n")
+        f.write("=" * 40 + "\n")
+        f.write(f"Generated: {datetime.now()}\n\n")
+        for key, value in summary.items():
+            f.write(f"{key}: {value}\n")
+
+    print(f"✓ Summary report saved to {output_dir}/summary_report.txt")
+    return df
+
+
+def generate_visualizations(df, output_dir="cleaning_reports"):
+    os.makedirs(output_dir, exist_ok=True)
+
+    if df.empty:
+        print("No data to visualize.")
+        return
+
+    sns.set_style("whitegrid")
+
+    plt.figure(figsize=(10, 6))
+    table_counts = df['table_name'].value_counts()
+    sns.barplot(x=table_counts.values, y=table_counts.index, hue=table_counts.index, palette="Blues_d", legend=False)
+    plt.title('Number of Cleaning Changes by Table', fontsize=14)
+    plt.xlabel('Number of changes')
+    plt.tight_layout()
+    plt.savefig(f"{output_dir}/1_changes_by_table.png", dpi=150)
+    plt.close()
+    print(f"✓ Saved: {output_dir}/1_changes_by_table.png")
+
+    plt.figure(figsize=(12, 6))
+    col_counts = df['column_name'].value_counts().head(10)
+    sns.barplot(x=col_counts.values, y=col_counts.index, hue=col_counts.index, palette="Greens_d", legend=False)
+    plt.title('Top 10 Columns with Most Changes', fontsize=14)
+    plt.xlabel('Number of changes')
+    plt.tight_layout()
+    plt.savefig(f"{output_dir}/2_changes_by_column.png", dpi=150)
+    plt.close()
+    print(f"✓ Saved: {output_dir}/2_changes_by_column.png")
+
+    plt.figure(figsize=(8, 8))
+    action_counts = df['action'].value_counts()
+    plt.pie(action_counts.values, labels=action_counts.index, autopct='%1.1f%%', startangle=90)
+    plt.title('Types of Cleaning Actions', fontsize=14)
+    plt.tight_layout()
+    plt.savefig(f"{output_dir}/3_actions_pie.png", dpi=150)
+    plt.close()
+    print(f"✓ Saved: {output_dir}/3_actions_pie.png")
+
+    if 'cleaned_at' in df.columns:
+        plt.figure(figsize=(10, 5))
+        df['date_only'] = pd.to_datetime(df['cleaned_at']).dt.date
+        time_counts = df['date_only'].value_counts().sort_index()
+        plt.plot(time_counts.index, time_counts.values, marker='o', linestyle='-', color='purple')
+        plt.title('Cleaning Activity Over Time', fontsize=14)
+        plt.xlabel('Date')
+        plt.ylabel('Number of changes')
+        plt.xticks(rotation=45)
+        plt.tight_layout()
+        plt.savefig(f"{output_dir}/4_changes_over_time.png", dpi=150)
+        plt.close()
+        print(f"✓ Saved: {output_dir}/4_changes_over_time.png")
+
+    plt.figure(figsize=(10, 6))
+    cross_tab = pd.crosstab(df['table_name'], df['action'])
+    sns.heatmap(cross_tab, annot=True, fmt='d', cmap='YlOrRd')
+    plt.title('Cleaning Actions by Table', fontsize=14)
+    plt.tight_layout()
+    plt.savefig(f"{output_dir}/5_heatmap_table_action.png", dpi=150)
+    plt.close()
+    print(f"✓ Saved: {output_dir}/5_heatmap_table_action.png")
+
+
+def generate_exception_report(conn, output_dir="cleaning_reports"):
+    df = pd.read_sql_query("SELECT * FROM cleaning_log", conn)
+
+    if df.empty:
+        print("No cleaning actions to report.")
+        return
+
+    os.makedirs(output_dir, exist_ok=True)
+
+    with open(f"{output_dir}/exception_report.txt", "w", encoding="utf-8") as f:
+        f.write("EXCEPTION REPORT - DATA CLEANING PIPELINE\n")
+        f.write("=" * 50 + "\n")
+        f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+
+        f.write("RESUMEN EJECUTIVO\n")
+        f.write("-" * 20 + "\n")
+        f.write(f"Total de cambios realizados: {len(df)}\n")
+        f.write(f"Tablas afectadas: {df['table_name'].unique().tolist()}\n")
+        f.write(f"Columnas afectadas: {df['column_name'].unique().tolist()}\n\n")
+
+        f.write("DETALLE POR TIPO DE ERROR\n")
+        f.write("-" * 25 + "\n")
+
+        for reason, group in df.groupby('reason'):
+            f.write(f"\n[{reason}]\n")
+            f.write(f"  Cantidad: {len(group)}\n")
+            f.write(f"  Ejemplo: {group.iloc[0]['table_name']}.{group.iloc[0]['column_name']} ")
+            f.write(f"('{group.iloc[0]['original_value']}' → '{group.iloc[0]['new_value']}')\n")
+
+        f.write("\n" + "=" * 50 + "\n")
+        f.write("FIN DEL REPORTE\n")
+
+    print(f"✓ Exception report saved to {output_dir}/exception_report.txt")
+
+
+def export_log_to_csv(conn, output_dir="cleaning_reports"):
+    df = pd.read_sql_query("SELECT * FROM cleaning_log", conn)
+
+    if df.empty:
+        print("No log entries to export.")
+        return
+
+    csv_path = f"{output_dir}/cleaning_log_export.csv"
+    df.to_csv(csv_path, index=False)
+    print(f"✓ Full cleaning log exported to {csv_path}")
+
+
+def run_cleaning_log():
+    print("\n" + "=" * 50)
+    print("CLEANING LOG GENERATOR")
+    print("=" * 50 + "\n")
+
+    conn = sqlite3.connect('test_db.db')
+
+    create_log_table(conn)
+
+    print("\nGenerating reports...\n")
+    df = generate_summary_report(conn)
+
+    if df is not None and not df.empty:
+        generate_visualizations(df)
+        generate_exception_report(conn)
+        export_log_to_csv(conn)
+    else:
+        print("\n⚠️  No cleaning log entries found.")
+        print("   Make sure your cleaning functions call log_change()")
+
+    conn.close()
+
+    print("\n" + "=" * 50)
+    print("CLEANING LOG COMPLETE")
+    print(f"Check the 'cleaning_reports' folder for outputs")
+    print("=" * 50)
+
+
 conn = sqlite3.connect('test_db.db')
 
 clean_nonnumeric_rows(conn, 'transactions', 'Amount', id_column='TransactionId')
@@ -401,3 +614,5 @@ move_and_remove_future_dates(conn, 'accounts', 'OpeningDate', id_column='Account
 invalid_transaction_dates(conn)
 
 conn.close()
+
+run_cleaning_log()
