@@ -58,12 +58,13 @@ def generate_account(num_accounts=50):
         start_date = datetime.datetime(2024, 1, 1)
         end_date = datetime.datetime(2026, 12, 12)
         opening_date = generate_date(start_date, end_date, tz_selected)
-        dtst_acc.append([i, generate_statustxn(), generate_currency(), opening_date.isoformat(), types_choice, tz_name])
+        status_choice = random.choices(['ACTIVE','CLOSED'], weights=[0.85, 0.15])[0]
+        dtst_acc.append([i,  status_choice, generate_currency(), opening_date.isoformat(), types_choice, tz_name])
     return dtst_acc
 
 
 def generate_transactions(dtst, min_txn=1, max_txn=5):
-    dtst_txn = [['TransactionID', 'AccountID', 'Date', 'Amount', 'Currency', 'Debit/Credit', 'Status', 'Timezone']]
+    dtst_txn = [['TransactionID', 'AccountID', 'Date', 'Amount', 'Debit/Credit', 'Status', 'Timezone']]
     currency_list = ["USD", "EUR", "SEK"]
     txn_id = 0
     for row in dtst[1:]:
@@ -122,7 +123,6 @@ def generate_transactions(dtst, min_txn=1, max_txn=5):
                 account_id,
                 date.isoformat(),
                 amount,
-                curr_choice,
                 debcred_choice,
                 generate_statustxn(),
                 txn_tz_name
@@ -205,8 +205,8 @@ def add_field_errors(table, percent_error=0.03, error_fields=None):
         error_fields = list(range(len(header)))
 
     typo_map = {
-        "BOOK": "BOK", "PENDING": "PENDNG", "REJECTED": "REJCTD",
-        "USD": "US", "EUR": "EURO", "SEK": "SEKK",
+        "BOOK": "BOK", "ACTIVE":"ACTVE","CLOSED":"CLOSE", "PENDING": "PENDNG", "REJECTED": "REJCTD",
+        "USD": "US", "EUR": "EURO", "SEK": "SEKK", "DEBIT":"debit", "CREDIT":"CREIT",
         "CACC": "CACCX", "SAVG": "SAV", "LOAN": "LOA"
     }
     nonsense = ["???", "N/A", "null", "xxxx"]
@@ -231,19 +231,19 @@ def add_field_errors(table, percent_error=0.03, error_fields=None):
 
 
 if __name__ == '__main__':
-    accounts = generate_account(num_accounts=100)
+    accounts = generate_account(num_accounts=150)
     accounts_with_dupes = add_row_duplicates(accounts, percent_duplicates=0.05)
     accounts_with_nulls = add_partial_nulls(accounts_with_dupes, percent_nulls=0.05, min_fields=1, max_fields=4,
                                             exclude_cols=[0])
     accounts_with_mixed_dates = randomize_date_formats(accounts_with_nulls, date_col_idx=3, percent_change=0.15)
-    accounts_with_errors = add_field_errors(accounts_with_mixed_dates, percent_error=0.03, error_fields=[1, 2])
+    accounts_with_errors = add_field_errors(accounts_with_mixed_dates, percent_error=0.09, error_fields=[1, 2])
 
     transactions = generate_transactions(accounts_with_mixed_dates, min_txn=1, max_txn=3)
     transactions_with_dupes = add_row_duplicates(transactions, percent_duplicates=0.1)
     transactions_with_nulls = add_partial_nulls(transactions_with_dupes, percent_nulls=0.05, min_fields=1, max_fields=5,
                                                 exclude_cols=[0, 1])
     transactions_with_mixed_dates = randomize_date_formats(transactions_with_nulls, date_col_idx=2, percent_change=0.15)
-    transactions_with_errors = add_field_errors(transactions_with_mixed_dates, percent_error=0.03, error_fields=[4, 6])
+    transactions_with_errors = add_field_errors(transactions_with_mixed_dates, percent_error=0.09, error_fields=[4, 5,6])
 
     with open('accounts.csv', 'w', newline='') as acc_csv:
         writer = csv.writer(acc_csv)

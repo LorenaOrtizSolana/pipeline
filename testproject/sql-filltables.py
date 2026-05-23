@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS accounts (
 ''')
 
 #### Fill accounts table
-# cursor.execute('DELETE FROM transactions')
+#cursor.execute('DELETE FROM transactions')
 cursor.execute('DELETE FROM accounts')
 cursor.execute('DELETE FROM sqlite_sequence WHERE name="accounts"')
 
