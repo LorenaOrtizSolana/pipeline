@@ -1,260 +1,267 @@
-import sqlite3
-import difflib
+import csv
+import datetime
+import random
+from datetime import timedelta
 from dateutil import parser
-from datetime import datetime, timezone
+import pytz
+
+random.seed(42)
+
+TIMEZONES = ["Europe/Berlin", "America/New_York", "Europe/London"]
 
 
-def move_and_remove_future_dates(conn, table, date_column, id_column='rowid'):
-    cursor = conn.cursor()
-
-    cursor.execute(f"PRAGMA table_info({table})")
-    columns = [row[1] for row in cursor.fetchall()]
-    col_defs = ', '.join([f"{col} TEXT" for col in columns])
-
-    now = datetime.now().isoformat()
-
-    # rows with future dates
-    cursor.execute(
-        f"SELECT * FROM {table} WHERE {date_column} > ?",
-        (now,)
-    )
-    future_rows = cursor.fetchall()
-    # if not future_rows:
-    # print(f"No future dates found in column '{date_column}'.")
-    # return
-    ####
-
-    ####
-    new_table = f"{table}_future_{date_column}"
-    cursor.execute(f"DROP TABLE IF EXISTS {new_table}")
-    cursor.execute(f"CREATE TABLE {new_table} ({col_defs})")
-    ####
-
-    ####
-    placeholders = ','.join(['?'] * len(columns))
-    cursor.executemany(
-        f"INSERT INTO {new_table} VALUES ({placeholders})",
-        future_rows
-    )
-    ####
-
-    ####
-    id_idx = columns.index(id_column)
-    future_ids = [row[id_idx] for row in future_rows]
-    if future_ids:
-        id_placeholders = ','.join(['?'] * len(future_ids))
-        cursor.execute(
-            f"DELETE FROM {table} WHERE {id_column} IN ({id_placeholders})",
-            future_ids
-        )
-        ####
-
-    conn.commit()
+def random_timezone():
+    return pytz.timezone(random.choices(TIMEZONES, weights=[0.8, 0.1, 0.1])[0])
 
 
-def clean_nonnumeric_rows(conn, table, column, id_column='rowid'):
-    cursor = conn.cursor()
-
-    # check column type
-    cursor.execute(f"PRAGMA table_info({table})")
-    col_info = {row[1]: row[2].upper() for row in cursor.fetchall()}
-    col_type = col_info.get(column)
-    if col_type in ('INTEGER', 'REAL'):
-        return
-        ####
-
-    # neither 'integer' nor 'real' rows
-    cursor.execute(f"""  
-        SELECT * FROM {table}  
-        WHERE typeof({column}) NOT IN ('integer', 'real')  
-    """)
-    nonnumeric_rows = cursor.fetchall()
-    if not nonnumeric_rows:
-        print(f"No non-numeric values found in column '{column}'.")
-        return
-
-        # column names for table creation
-    cursor.execute(f"PRAGMA table_info({table})")
-    columns = [row[1] for row in cursor.fetchall()]
-    col_defs = ', '.join([f"{col} TEXT" for col in columns])  # Use TEXT for all for simplicity
-    ####
-
-    ####
-    new_table = f"{table}_nonnumeric_{column}"
-    cursor.execute(f"DROP TABLE IF EXISTS {new_table}")
-    cursor.execute(f"CREATE TABLE {new_table} ({col_defs})")
-    ####
-
-    ####
-    placeholders = ','.join(['?'] * len(columns))
-    cursor.executemany(
-        f"INSERT INTO {new_table} VALUES ({placeholders})",
-        nonnumeric_rows
-    )
-    ####
-
-    # remove non-numeric rows from original table
-    id_idx = columns.index(id_column)
-    nonnumeric_ids = [row[id_idx] for row in nonnumeric_rows]
-    if nonnumeric_ids:
-        id_placeholders = ','.join(['?'] * len(nonnumeric_ids))
-        cursor.execute(
-            f"DELETE FROM {table} WHERE {id_column} IN ({id_placeholders})",
-            nonnumeric_ids
-        )
-
-    conn.commit()
+def generate_date(start_date, end_date, tz_selected):
+    delta = end_date - start_date
+    delta_in_second = delta.days * 24 * 3600 + delta.seconds
+    random_second = random.randrange(delta_in_second)
+    date = start_date + timedelta(seconds=random_second)
+    date = tz_selected.localize(date)
+    return date
 
 
-def to_iso8601_preserve_tz(date_str):
-    dt = parser.parse(date_str)
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.strftime('%Y-%m-%dT%H:%M:%S%z')[:-2] + ':' + dt.strftime('%z')[-2:]
-
-
-def correct_date_column(conn, table, date_column, id_column):
-    cursor = conn.cursor()
-    cursor.execute(f'SELECT {id_column}, {date_column} FROM {table}')
-    rows = cursor.fetchall()
-    for row_id, date_str in rows:
-        if date_str is not None:
-            try:
-                corrected_date = to_iso8601_preserve_tz(date_str)
-                cursor.execute(
-                    f'UPDATE {table} SET {date_column} = ? WHERE {id_column} = ?',
-                    (corrected_date, row_id)
-                )
-            except Exception as e:
-                cursor.execute(f'UPDATE transactions SET TransactionDate = NULL WHERE TransactionId = ?',
-                               (transaction_id,))
-    conn.commit()
-
-
-def clean_and_flag_column(
-        conn,
-        table_name,
-        column_name,
-        correct_values,
-        id_column='TransactionId'
-):
-    cursor = conn.cursor()
-
-    # 1. Getting unique values
-    cursor.execute(f'SELECT DISTINCT {column_name} FROM {table_name}')
-    unique_values = [row[0] for row in cursor.fetchall() if row[0] is not None]
-
-    # 2. Building mapping
-    mapping = {}
-    for val in unique_values:
-        match = difflib.get_close_matches(val, correct_values, n=1, cutoff=0.6)
-        if match:
-            mapping[val] = match[0]
-        else:
-            mapping[val] = val
-
-            # 3. Updating incorrect values
-    for incorrect_value, correct_value in mapping.items():
-        if incorrect_value != correct_value:
-            query = f'UPDATE {table_name} SET {column_name} = ? WHERE {column_name} = ?'
-            cursor.execute(query, (correct_value, incorrect_value))
-
-            # 4. Finding incorrect IDs (for flagging)
-    incorrect_values = [val for val in unique_values if val not in correct_values]
-    if incorrect_values:
-        placeholders = ','.join('?' for _ in incorrect_values)
-        query = f'SELECT {id_column} FROM {table_name} WHERE {column_name} IN ({placeholders})'
-        cursor.execute(query, incorrect_values)
-        incorrect_ids = [row[0] for row in cursor.fetchall()]
+def generate_amount():
+    intervals = [1, 2, 3, 4]
+    inter_choice = random.choices(intervals, weights=[0.1, 0.2, 0.6, 0.1])[0]
+    if inter_choice == 1:
+        amount = random.randint(100, 199)
+    elif inter_choice == 2:
+        amount = random.randint(200, 599)
+    elif inter_choice == 3:
+        amount = random.randint(600, 1999)
     else:
-        incorrect_ids = []
-
-        # 5. Adding flag column if not exists
-    flag_column = f'{column_name}Cleaned'
-    try:
-        cursor.execute(f'ALTER TABLE {table_name} ADD COLUMN {flag_column} INTEGER')
-    except sqlite3.OperationalError:
-        pass  # Column already exists
-
-    # 6. Setting all to 0
-    cursor.execute(f'UPDATE {table_name} SET {flag_column} = 0')
-
-    # 7. Setting to 1 for incorrect IDs
-    if incorrect_ids:
-        placeholders = ','.join('?' for _ in incorrect_ids)
-        query = f'UPDATE {table_name} SET {flag_column} = 1 WHERE {id_column} IN ({placeholders})'
-        cursor.execute(query, incorrect_ids)
-
-    conn.commit()
-    # print(f"Cleaned column '{column_name}'. Mapping used: {mapping}")
+        amount = random.randint(2000, 2500)
+    return amount
 
 
-conn = sqlite3.connect('test_db.db')
+def generate_currency():
+    currency_list = ["USD", "EUR", "SEK"]
+    curr_choice = random.choices(currency_list, weights=[0.1, 0.8, 0.1])[0]
+    return curr_choice
 
-clean_nonnumeric_rows(conn, 'transactions', 'Amount', id_column='TransactionId')
 
-correct_date_column(
-    conn,
-    table='transactions',
-    date_column='Date',
-    id_column='TransactionId')
+def generate_statustxn():
+    status_list = ["BOOK", "PENDING", "REJECTED"]
+    status_choice = random.choice(status_list)
+    return status_choice
 
-correct_date_column(
-    conn,
-    table='accounts',
-    date_column='OpeningDate',
-    id_column='AccountId')
 
-clean_and_flag_column(
-    conn,
-    table_name='transactions',
-    column_name='Status',
-    correct_values=['BOOK', 'PENDING', 'REJECTED'],
-    id_column='TransactionId'
-)
+def generate_account(num_accounts=50):
+    dtst_acc = [['AccountID', 'Status', 'Currency', 'OpeningDate', 'AccountTypeCode', 'Timezone']]
+    for i in range(num_accounts):
+        types_choice = random.choice(['CACC', 'SAVG', 'LOAN'])
+        tz_selected = random_timezone()
+        tz_name = tz_selected.zone
 
-clean_and_flag_column(
-    conn,
-    table_name='transactions',
-    column_name='DebitCredit',
-    correct_values=['DEBIT', 'CREDIT'],
-    id_column='TransactionId'
-)
+        date_future_choice = random.choices([1, 2], weights=[0.95, 0.05])[0]
+        if date_future_choice == 2:
+            start_date = datetime.datetime(2024, 12, 12)
+            end_date = datetime.datetime(2025, 1, 1)
+        else:
+            start_date = datetime.datetime(2023, 1, 1)
+            end_date = datetime.datetime(2024, 11, 11)
+        opening_date = generate_date(start_date, end_date, tz_selected)
+        status_choice = random.choices(['ACTIVE', 'CLOSED'], weights=[0.85, 0.15])[0]
+        dtst_acc.append([i, status_choice, generate_currency(), opening_date.isoformat(), types_choice, tz_name])
+    return dtst_acc
 
-clean_and_flag_column(
-    conn,
-    table_name='transactions',
-    column_name='Timezone',
-    correct_values=['Europe/Berlin', 'Europe/London', 'America/New_York'],
-    id_column='TransactionId'
-)
 
-clean_and_flag_column(
-    conn,
-    table_name='accounts',
-    column_name='Status',
-    correct_values=['ACTIVE', 'CLOSED'],
-    id_column='AccountId'
-)
+def generate_transactions(dtst, min_txn=1, max_txn=5):
+    dtst_txn = [['TransactionID', 'AccountID', 'Date', 'Amount', 'Debit/Credit', 'Status', 'Timezone']]
+    currency_list = ["USD", "EUR", "SEK"]
+    txn_id = 0
+    for row in dtst[1:]:
+        account_id = row[0]
+        col_curr = row[2]
+        col_date_str = row[3]
+        try:
+            tz_name = row[5] if len(row) > 5 and row[5] else random_timezone().zone
+            tz_selected = pytz.timezone(tz_name)
+        except Exception:
+            tz_selected = random_timezone()
+        if not col_date_str:
+            col_date = generate_date(datetime.datetime(2024, 12, 12), datetime.datetime(2025, 12, 12), tz_selected)
+        else:
+            try:
+                col_date = parser.parse(col_date_str)
+            except Exception:
+                col_date = generate_date(datetime.datetime(2024, 12, 12), datetime.datetime(2025, 12, 12), tz_selected)
+            if col_date.tzinfo is None:
+                col_date = tz_selected.localize(col_date)
+        num_txn = random.randint(min_txn, max_txn)
+        for _ in range(num_txn):
+            txn_id += 1
+            txn_tz_selected = random_timezone()
+            txn_tz_name = txn_tz_selected.zone
 
-clean_and_flag_column(
-    conn,
-    table_name='accounts',
-    column_name='Currency',
-    correct_values=['EUR', 'USD', 'SEK'],
-    id_column='AccountId'
-)
+            date_earlier_choice = random.choices([1, 2], weights=[0.95, 0.05])[0]
+            if date_earlier_choice == 2:
+                txn_start_date = datetime.datetime(2023, 1, 1)
+                txn_end_date = datetime.datetime(2024, 11, 11)
+            else:
+                txn_start_date = datetime.datetime(2024, 12, 12)
+                txn_end_date = datetime.datetime(2025, 12, 12)
+            txn_start_date = txn_tz_selected.localize(txn_start_date)
+            txn_end_date = txn_tz_selected.localize(txn_end_date)
+            if col_curr == 'USD':
+                curr_choice = random.choices(currency_list, weights=[0.8, 0.1, 0.1])[0]
+            elif col_curr == 'EUR':
+                curr_choice = random.choices(currency_list, weights=[0.1, 0.8, 0.1])[0]
+            else:  # SEK
+                curr_choice = random.choices(currency_list, weights=[0.1, 0.1, 0.8])[0]
+            txndate_inpast = random.choices([0, 1], weights=[0.9, 0.1])[0]
+            if txndate_inpast == 1:
+                delta = col_date - txn_start_date
+                delta_seconds = delta.days * 86400 + delta.seconds
+                random_second = random.randrange(delta_seconds) if delta_seconds > 0 else 0
+                date = txn_start_date + timedelta(seconds=random_second)
+            else:
+                delta = txn_end_date - col_date
+                delta_seconds = delta.days * 86400 + delta.seconds
+                random_second = random.randrange(delta_seconds) if delta_seconds > 0 else 0
+                date = col_date + timedelta(seconds=random_second)
+                if date.tzinfo is None:
+                    date = txn_tz_selected.localize(date)
+                else:
+                    date = date.astimezone(txn_tz_selected)
+            debcred_choice = random.choice(["DEBIT", "CREDIT"])
+            amount = generate_amount()
+            amount = abs(amount) if debcred_choice == "DEBIT" else -abs(amount)
+            dtst_txn.append([
+                txn_id,
+                account_id,
+                date.isoformat(),
+                amount,
+                debcred_choice,
+                generate_statustxn(),
+                txn_tz_name
+            ])
+    return dtst_txn
 
-clean_and_flag_column(
-    conn,
-    table_name='accounts',
-    column_name='AccountTypeCode',
-    correct_values=['CACC', 'LOAN', 'SAVG'],
-    id_column='AccountId'
-)
 
-move_and_remove_future_dates(conn, 'transactions', 'Date', id_column='TransactionId')
-move_and_remove_future_dates(conn, 'accounts', 'OpeningDate', id_column='AccountId')
+def add_row_duplicates(table, num_duplicates=1, percent_duplicates=0.05):
+    header = table[0]
+    rows = table[1:]
+    n = len(rows)
+    total_duplicates = max(num_duplicates, int(n * percent_duplicates))
+    indices = random.choices(range(n), k=total_duplicates)
+    duplicates = [rows[i] for i in indices]
+    random.shuffle(duplicates)
+    new_rows = rows + duplicates
+    random.shuffle(new_rows)
+    return [header] + new_rows
 
-conn.close()
 
+def add_partial_nulls(table, percent_nulls=0.05, min_fields=1, max_fields=5, exclude_cols=None):
+    header = table[0]
+    rows = table[1:]
+    n = len(rows)
+    num_null_rows = int(n * percent_nulls)
+    indices = random.sample(range(n), num_null_rows)
+    if max_fields is None:
+        max_fields = len(header) - 1
+    if exclude_cols is None:
+        exclude_cols = [0]
+    for idx in indices:
+        possible_fields = [i for i in range(len(header)) if i not in exclude_cols]
+        num_fields_to_null = random.randint(min_fields, min(max_fields, len(possible_fields)))
+        fields_to_null = random.sample(possible_fields, num_fields_to_null)
+        for f in fields_to_null:
+            rows[idx][f] = ""
+    return [header] + rows
+
+
+def randomize_date_formats(table, date_col_idx, percent_change=0.1, exclude_header=True):
+    date_formats = [
+        "%Y-%m-%dT%H:%M:%S%z",
+        "%Y-%m-%d %H:%M:%S",
+        "%d/%m/%Y %H:%M",
+        "%m-%d-%Y %I:%M %p",
+        "%Y/%m/%d",
+        "%d-%b-%Y",
+        "%Y-%m-%d",
+    ]
+    header = table[0] if exclude_header else []
+    rows = table[1:] if exclude_header else table
+    n = len(rows)
+    num_to_change = int(n * percent_change)
+    indices = random.sample(range(n), num_to_change)
+    for idx in indices:
+        row = rows[idx]
+        date_str = row[date_col_idx]
+        if not date_str:
+            continue
+        try:
+            dt = parser.parse(date_str)
+            fmt = random.choice(date_formats)
+
+            if "%z" not in fmt and dt.tzinfo is not None:
+                dt = dt.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+            new_date_str = dt.strftime(fmt)
+            row[date_col_idx] = new_date_str
+        except Exception:
+            continue
+    return [header] + rows if exclude_header else rows
+
+
+def add_field_errors(table, percent_error=0.03, error_fields=None):
+    header = table[0]
+    rows = table[1:]
+    n = len(rows)
+    num_error_rows = int(n * percent_error)
+    indices = random.sample(range(n), num_error_rows)
+    if error_fields is None:
+        error_fields = list(range(len(header)))
+
+    typo_map = {
+        "BOOK": "BOK", "ACTIVE": "ACTVE", "CLOSED": "CLOSE", "PENDING": "PENDNG", "REJECTED": "REJCTD",
+        "USD": "US", "EUR": "EURO", "SEK": "SEKK", "DEBIT": "debit", "CREDIT": "CREIT",
+        "CACC": "CACCX", "SAVG": "SAV", "LOAN": "LOA"
+    }
+    nonsense = ["???", "N/A", "null", "xxxx"]
+
+    for idx in indices:
+        row = rows[idx]
+        for col in error_fields:
+            val = row[col]
+            if not val:
+                continue
+
+            err_type = random.choice(["typo", "nonsense", "case", "whitespace"])
+            if err_type == "typo" and str(val) in typo_map:
+                row[col] = typo_map[str(val)]
+            elif err_type == "nonsense":
+                row[col] = random.choice(nonsense)
+            elif err_type == "case":
+                row[col] = str(val).lower() if random.random() < 0.5 else str(val).upper()
+            elif err_type == "whitespace":
+                row[col] = f"  {val}  "
+    return [header] + rows
+
+
+if __name__ == '__main__':
+    accounts = generate_account(num_accounts=150)
+    accounts_with_dupes = add_row_duplicates(accounts, percent_duplicates=0.05)
+    accounts_with_nulls = add_partial_nulls(accounts_with_dupes, percent_nulls=0.05, min_fields=1, max_fields=4,
+                                            exclude_cols=[0])
+    accounts_with_mixed_dates = randomize_date_formats(accounts_with_nulls, date_col_idx=3, percent_change=0.15)
+    accounts_with_errors = add_field_errors(accounts_with_mixed_dates, percent_error=0.09, error_fields=[1, 2])
+
+    transactions = generate_transactions(accounts_with_mixed_dates, min_txn=1, max_txn=3)
+    transactions_with_dupes = add_row_duplicates(transactions, percent_duplicates=0.1)
+    transactions_with_nulls = add_partial_nulls(transactions_with_dupes, percent_nulls=0.05, min_fields=1, max_fields=5,
+                                                exclude_cols=[0, 1])
+    transactions_with_mixed_dates = randomize_date_formats(transactions_with_nulls, date_col_idx=2, percent_change=0.15)
+    transactions_with_errors = add_field_errors(transactions_with_mixed_dates, percent_error=0.09,
+                                                error_fields=[4, 5, 6])
+
+    with open('accounts.csv', 'w', newline='') as acc_csv:
+        writer = csv.writer(acc_csv)
+        writer.writerows(accounts_with_errors)
+
+    with open('transactions.csv', 'w', newline='') as txn_csv:
+        writer = csv.writer(txn_csv)
+        writer.writerows(transactions_with_errors)
