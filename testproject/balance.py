@@ -18,7 +18,7 @@ cursor.execute('''
                    NULL
                    UNIQUE,
                    Balance
-                   REAL,
+                   DECIMAL(12,2),
                    DateLastUpdate
                    DATETIME,
                    Timezone
