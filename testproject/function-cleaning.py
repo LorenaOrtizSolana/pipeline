@@ -2,6 +2,61 @@ import sqlite3
 import difflib
 from dateutil import parser
 from datetime import timezone
+import sqlite3
+
+
+def clean_nonnumeric_rows(conn, table, column, id_column='rowid'):
+    cursor = conn.cursor()
+
+    # check column type
+    cursor.execute(f"PRAGMA table_info({table})")
+    col_info = {row[1]: row[2].upper() for row in cursor.fetchall()}
+    col_type = col_info.get(column)
+    if col_type in ('INTEGER', 'REAL'):
+        return
+        ####
+
+    # neither 'integer' nor 'real' rows
+    cursor.execute(f"""  
+        SELECT * FROM {table}  
+        WHERE typeof({column}) NOT IN ('integer', 'real')  
+    """)
+    nonnumeric_rows = cursor.fetchall()
+    if not nonnumeric_rows:
+        print(f"No non-numeric values found in column '{column}'.")
+        return
+
+        # column names for table creation
+    cursor.execute(f"PRAGMA table_info({table})")
+    columns = [row[1] for row in cursor.fetchall()]
+    col_defs = ', '.join([f"{col} TEXT" for col in columns])  # Use TEXT for all for simplicity
+    ####
+
+    ####
+    new_table = f"{table}_nonnumeric_{column}"
+    cursor.execute(f"DROP TABLE IF EXISTS {new_table}")
+    cursor.execute(f"CREATE TABLE {new_table} ({col_defs})")
+    ####
+
+    ####
+    placeholders = ','.join(['?'] * len(columns))
+    cursor.executemany(
+        f"INSERT INTO {new_table} VALUES ({placeholders})",
+        nonnumeric_rows
+    )
+    ####
+
+    # remove non-numeric rows from original table
+    id_idx = columns.index(id_column)
+    nonnumeric_ids = [row[id_idx] for row in nonnumeric_rows]
+    if nonnumeric_ids:
+        id_placeholders = ','.join(['?'] * len(nonnumeric_ids))
+        cursor.execute(
+            f"DELETE FROM {table} WHERE {id_column} IN ({id_placeholders})",
+            nonnumeric_ids
+        )
+
+    conn.commit()
 
 
 def to_iso8601_preserve_tz(date_str):
@@ -89,6 +144,8 @@ def clean_and_flag_column(
 
 conn = sqlite3.connect('test_db.db')
 
+clean_nonnumeric_rows(conn, 'transactions', 'Amount', id_column='TransactionId')
+
 correct_date_column(
     conn,
     table='transactions',
@@ -148,3 +205,5 @@ clean_and_flag_column(
     correct_values=['CACC', 'LOAN', 'SAVG'],
     id_column='AccountId'
 )
+
+conn.close()
