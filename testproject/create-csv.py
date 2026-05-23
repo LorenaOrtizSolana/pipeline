@@ -55,11 +55,17 @@ def generate_account(num_accounts=50):
         types_choice = random.choice(['CACC', 'SAVG', 'LOAN'])
         tz_selected = random_timezone()
         tz_name = tz_selected.zone
-        start_date = datetime.datetime(2024, 1, 1)
-        end_date = datetime.datetime(2026, 12, 12)
+
+        date_future_choice = random.choices([1, 2], weights=[0.9, 0.1])[0]
+        if date_future_choice == 2:
+            start_date = datetime.datetime(2026, 12, 12)
+            end_date = datetime.datetime(2027, 12, 12)
+        else:
+            start_date = datetime.datetime(2024, 1, 1)
+            end_date = datetime.datetime.now()
         opening_date = generate_date(start_date, end_date, tz_selected)
-        status_choice = random.choices(['ACTIVE','CLOSED'], weights=[0.85, 0.15])[0]
-        dtst_acc.append([i,  status_choice, generate_currency(), opening_date.isoformat(), types_choice, tz_name])
+        status_choice = random.choices(['ACTIVE', 'CLOSED'], weights=[0.85, 0.15])[0]
+        dtst_acc.append([i, status_choice, generate_currency(), opening_date.isoformat(), types_choice, tz_name])
     return dtst_acc
 
 
@@ -77,12 +83,12 @@ def generate_transactions(dtst, min_txn=1, max_txn=5):
         except Exception:
             tz_selected = random_timezone()
         if not col_date_str:
-            col_date = generate_date(datetime.datetime(2024, 1, 1), datetime.datetime(2026, 12, 12), tz_selected)
+            col_date = generate_date(datetime.datetime(2024, 1, 1), datetime.datetime(2025, 12, 12), tz_selected)
         else:
             try:
                 col_date = parser.parse(col_date_str)
             except Exception:
-                col_date = generate_date(datetime.datetime(2024, 1, 1), datetime.datetime(2026, 12, 12), tz_selected)
+                col_date = generate_date(datetime.datetime(2024, 1, 1), datetime.datetime(2025, 12, 12), tz_selected)
             if col_date.tzinfo is None:
                 col_date = tz_selected.localize(col_date)
         num_txn = random.randint(min_txn, max_txn)
@@ -90,8 +96,8 @@ def generate_transactions(dtst, min_txn=1, max_txn=5):
             txn_id += 1
             txn_tz_selected = random_timezone()
             txn_tz_name = txn_tz_selected.zone
-            txn_start_date = datetime.datetime(2024, 1, 1)
-            txn_end_date = datetime.datetime(2026, 12, 12)
+            txn_start_date = datetime.datetime(2023, 1, 1)
+            txn_end_date = datetime.datetime(2025, 12, 12)
             txn_start_date = txn_tz_selected.localize(txn_start_date)
             txn_end_date = txn_tz_selected.localize(txn_end_date)
             if col_curr == 'USD':
@@ -205,8 +211,8 @@ def add_field_errors(table, percent_error=0.03, error_fields=None):
         error_fields = list(range(len(header)))
 
     typo_map = {
-        "BOOK": "BOK", "ACTIVE":"ACTVE","CLOSED":"CLOSE", "PENDING": "PENDNG", "REJECTED": "REJCTD",
-        "USD": "US", "EUR": "EURO", "SEK": "SEKK", "DEBIT":"debit", "CREDIT":"CREIT",
+        "BOOK": "BOK", "ACTIVE": "ACTVE", "CLOSED": "CLOSE", "PENDING": "PENDNG", "REJECTED": "REJCTD",
+        "USD": "US", "EUR": "EURO", "SEK": "SEKK", "DEBIT": "debit", "CREDIT": "CREIT",
         "CACC": "CACCX", "SAVG": "SAV", "LOAN": "LOA"
     }
     nonsense = ["???", "N/A", "null", "xxxx"]
@@ -243,7 +249,8 @@ if __name__ == '__main__':
     transactions_with_nulls = add_partial_nulls(transactions_with_dupes, percent_nulls=0.05, min_fields=1, max_fields=5,
                                                 exclude_cols=[0, 1])
     transactions_with_mixed_dates = randomize_date_formats(transactions_with_nulls, date_col_idx=2, percent_change=0.15)
-    transactions_with_errors = add_field_errors(transactions_with_mixed_dates, percent_error=0.09, error_fields=[4, 5,6])
+    transactions_with_errors = add_field_errors(transactions_with_mixed_dates, percent_error=0.09,
+                                                error_fields=[4, 5, 6])
 
     with open('accounts.csv', 'w', newline='') as acc_csv:
         writer = csv.writer(acc_csv)
