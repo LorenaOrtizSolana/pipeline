@@ -54,7 +54,7 @@ cursor.execute('''
 #### transactions on the same date by the same account
 
 cursor.execute('''
-    SELECT t.* 
+    SELECT t.TransactionId, t.AccountId, t.Date, t.Amount, t.DebitCredit, t.Status, t.Timezone
     FROM transactions t 
     JOIN ( 
         SELECT Date, AccountId, MIN(TransactionId) AS min_id 
