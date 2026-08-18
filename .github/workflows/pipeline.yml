@@ -23,7 +23,7 @@ jobs:
           pip install pandas matplotlib seaborn python-dateutil pytz
 
       - name: Run pipeline
-        working-directory: testproject/   # ✅ This is correct – your main.py is here
+        working-directory: testproject/   
         run: python main.py
 
       - name: Upload cleaning reports
