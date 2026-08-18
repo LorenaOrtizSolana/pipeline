@@ -1,5 +1,7 @@
 # Banking Data Pipeline - Data Cleaning, Audit Log & Reporting Layer
 
+[![Run Banking Pipeline](https://github.com/LorenaOrtizSolana/pipeline/actions/workflows/pipeline.yml/badge.svg)](https://github.com/LorenaOrtizSolana/pipeline/actions/workflows/pipeline.yml)
+
 **Author:** Lorena Ortiz Solana
 **Role:** Data Science / Analytics Candidate (Bachelor Level)
 **Focus:** Fintech / Banking - Data Quality, SQL, Python, Power BI, Auditability
