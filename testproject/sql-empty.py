@@ -219,7 +219,7 @@ for key, value in tzn_dict1.items():
 
 ###### Remove rows with more than one NULL field from accounts
 
-query = '''SELECT *   
+query = '''SELECT AccountId, Status, Currency, OpeningDate, AccountTypeCode, Timezone  
 FROM accounts  
 WHERE   
     ( 
