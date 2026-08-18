@@ -2,7 +2,7 @@ name: Run Banking Pipeline
 
 on:
   schedule:
-    - cron: '0 6 * * 1'
+    - cron: '0 6 * * 1'  
   workflow_dispatch:
 
 jobs:
@@ -23,7 +23,7 @@ jobs:
           pip install pandas matplotlib seaborn python-dateutil pytz
           
       - name: Run pipeline
-        working-directory: testproject/   # <-- THIS IS THE FIX
+        working-directory: testproject/
         run: python main.py
         
       - name: Upload cleaning reports
