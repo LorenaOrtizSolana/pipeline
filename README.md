@@ -101,6 +101,35 @@ Key DAX patterns used: `SWITCH(TRUE())` for reason-code categorization, `GROUPBY
 
 See `Power_BI_Case_Study.docx` for the full write-up, including the data model, DAX approach, and production-scope limitations.
 
+## Business Impact
+
+### Data Quality Before vs After
+
+| Metric | Raw Data | After Cleaning | Improvement |
+|--------|----------|----------------|-------------|
+| Accounts with errors | 31 (19.7%) | 0 | 100% |
+| Transactions with errors | 100 (30.5%) | 0 | 100% |
+| Total errors detected | 131 | 0 | 100% |
+
+### Estimated Manual Effort Saved
+
+- **Per run:** ~4.4 hours of manual review avoided
+- **Monthly:** ~17.6 hours saved
+- **Annualized (at €50/hr):** ~€10,560/year
+
+### Root Cause Breakdown
+
+From the cleaning_log:
+- **Date formatting issues:** 65 corrections
+- **Categorical typos:** ~25 fuzzy-matched corrections
+- **Invalid/future dates:** Removed and quarantined
+- **Total rows affected:** 27% of all data
+
+### Financial Impact
+
+- **Transaction value dropped:** ~13% of total transaction value (from Power BI analysis)
+- **False positives avoided:** Statistical benchmarking over 12-month rolling window reduces false alarms
+
 ## Limitations & Production Scope
 
 This is a proof-of-concept built on synthetic data, scoped that way intentionally. For a production deployment, this would additionally need:
