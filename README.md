@@ -82,7 +82,15 @@ This runs the full pipeline in order — data generation, table creation, dedupl
 
 ## Reporting Layer (Power BI)
 
-`12-aug-powerbi.pbix` turns the `cleaning_log` audit trail into a 4-page interactive report answering: **what are the main root causes of data-quality errors in the pipeline, and what is their financial impact in terms of transactions that had to be dropped?**
+`12-aug-powerbi.pbix` turns the `cleaning_log` audit trail into a 4-page 
+interactive report answering: **what are the main root causes of 
+data-quality errors, and what is their financial impact in terms of 
+dropped transactions?**
+
+![Root Cause & Error Composition](Dashboard_Page1_RootCause.png)
+![Reconciliation & Column-Level Detail](Dashboard_Page2_Reconciliation.png)
+![Trend View](Dashboard_Page3_Trend.png)
+![KPI Scorecard — Year-over-Year](Dashboard_Page4_KPIScorecard.png)
 
 - **Page 1 — Root Cause & Composition:** error category breakdown (date formatting, invalid dates, categorical corrections), transaction value by status, error rate by table, removed rows by root cause.
 - **Page 2 — Reconciliation:** removed transaction value by timezone, removed-vs-kept rate by timezone, average errors per column by table — mirrors cross-jurisdiction reconciliation work in regulatory reporting.
