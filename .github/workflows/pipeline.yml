@@ -2,9 +2,9 @@ name: Run Banking Pipeline
 
 on:
   schedule:
- 
+
     - cron: '0 6 * * 1'
-  workflow_dispatch:
+  workflow_dispatch: 
 
 jobs:
   run-pipeline:
