@@ -1,3 +1,5 @@
 .idea/
 *.csv
 __pycache__/
+.venv/
+queries/setup/*.db
